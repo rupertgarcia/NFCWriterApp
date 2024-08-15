@@ -120,23 +120,23 @@ namespace RFIDReaderApp
 
                 byte[] cmdApduAuth =
                 {
-            0xFF, 0x86, 0x00, 0x00, 0x05,
-            0x01, 0x00, 0x01, 0x60, 0x00
-        }; // authenticate
+                    0xFF, 0x86, 0x00, 0x00, 0x05,
+                    0x01, 0x00, 0x01, 0x60, 0x00
+                }; // authenticate
 
                 byte[] respApduAuth = new byte[256];
                 int respLengthAuth = respApduAuth.Length;
                 scard.Transmit(cmdApduAuth, cmdApduAuth.Length, respApduAuth, ref respLengthAuth);
 
                 byte[] cmdApdu =
-     {
-    0xFF, 0xD6, 0x00, 0x01, 0x10,
-    Byte.Parse(hex0, NumberStyles.HexNumber),
-    Byte.Parse(hex1, NumberStyles.HexNumber),
-    Byte.Parse(hex2, NumberStyles.HexNumber),
-    Byte.Parse(hex3, NumberStyles.HexNumber),
-    Byte.Parse(suffix, NumberStyles.HexNumber) // Use suffix from ComboBox
-};
+                 {
+                    0xFF, 0xD6, 0x00, 0x01, 0x10,
+                    Byte.Parse(hex0, NumberStyles.HexNumber),
+                    Byte.Parse(hex1, NumberStyles.HexNumber),
+                    Byte.Parse(hex2, NumberStyles.HexNumber),
+                    Byte.Parse(hex3, NumberStyles.HexNumber),
+                    Byte.Parse(suffix, NumberStyles.HexNumber) // Use suffix from ComboBox
+                };
 
 
                 byte[] respApdu = new byte[256];
