@@ -184,6 +184,7 @@ namespace RFIDReaderApp
                 string resp = BitConverter.ToString(respApdu.Take(respLength).ToArray()).Replace("-", "");
                 Console.WriteLine($"APDU Response: {resp}");
 
+                await Task.Delay(100);
                 txtPrompt.Text = "Success. Please remove card.";
 
                 if (resp.StartsWith("90"))
