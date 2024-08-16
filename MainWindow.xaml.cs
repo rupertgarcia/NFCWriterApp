@@ -245,7 +245,6 @@ namespace RFIDReaderApp
             }
         }
 
-
         public IDCheckResult CheckIfIDExistsInDatabase(string originalID)
         {
             using (MySqlConnection conn = new MySqlConnection(connectionString))

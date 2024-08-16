@@ -9,7 +9,7 @@
          Margin="0,21,10,0" 
          VerticalAlignment="Top" 
          Width="233" 
-         Height="151" 
+         Height="135" 
          TextWrapping="Wrap" 
          HorizontalScrollBarVisibility="Disabled" 
          VerticalScrollBarVisibility="Disabled"/>
