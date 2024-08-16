@@ -4,7 +4,15 @@
     xmlns:av="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="av" x:Class="RFIDReaderApp.MainWindow"
     Title="RFID Reader" Height="350" Width="525">
     <Grid Background="White">
-        <TextBox x:Name="txtPrompt" HorizontalAlignment="Right" Margin="0,21,10,0" VerticalAlignment="Top" Width="194" Height="151"/>
+        <TextBox x:Name="txtPrompt" 
+         HorizontalAlignment="Right" 
+         Margin="0,21,10,0" 
+         VerticalAlignment="Top" 
+         Width="194" 
+         Height="151" 
+         TextWrapping="Wrap" 
+         HorizontalScrollBarVisibility="Disabled" 
+         VerticalScrollBarVisibility="Disabled"/>
         <TextBox x:Name="txtQR" HorizontalAlignment="Left" Margin="12,47,0,0" VerticalAlignment="Top" Width="250" Height="22" MaxLength="7" KeyUp="txtQR_KeyUp"/>
         <Button x:Name="BtnSave" Content="Save" HorizontalAlignment="Left" Margin="14,233,0,0" VerticalAlignment="Top" Width="130" Height="30" Click="BtnSave_Click"/>
         <Button x:Name="BtnClose" Content="Close" HorizontalAlignment="Left" Margin="14,268,0,0" VerticalAlignment="Top" Width="130" Height="30" Click="BtnClose_Click"/>
