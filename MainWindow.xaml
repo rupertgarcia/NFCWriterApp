@@ -15,7 +15,7 @@
          VerticalScrollBarVisibility="Disabled"/>
         <TextBox x:Name="txtQR" HorizontalAlignment="Left" Margin="12,47,0,0" VerticalAlignment="Top" Width="235" Height="22" MaxLength="7" KeyUp="txtQR_KeyUp"/>
         <Button x:Name="BtnSave" Content="Save" HorizontalAlignment="Left" Margin="14,233,0,0" VerticalAlignment="Top" Width="130" Height="30" Click="BtnSave_Click"/>
-        <Button x:Name="BtnClose" Content="Close" HorizontalAlignment="Left" Margin="14,268,0,0" VerticalAlignment="Top" Width="130" Height="30" Click="BtnClose_Click"/>
+        <Button x:Name="BtnClear" Content="Clear" HorizontalAlignment="Left" Margin="14,268,0,0" VerticalAlignment="Top" Width="130" Height="30" Click="BtnClear_Click"/>
         <ComboBox x:Name="cmbCompany" HorizontalAlignment="Left" Margin="12,108,0,0" VerticalAlignment="Top" Width="235" SelectionChanged="ComboBox_SelectionChanged" RenderTransformOrigin="0.5,0.5"/>
         <Label Content="Select Company:" HorizontalAlignment="Left" Margin="12,82,0,0" VerticalAlignment="Top"/>
         <Label Content="Enter ID Number:" HorizontalAlignment="Left" Margin="12,21,0,0" VerticalAlignment="Top"/>

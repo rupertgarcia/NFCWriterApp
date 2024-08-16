@@ -26,6 +26,13 @@ namespace RFIDReaderApp
             public string CompanyID { get; set; }
         }
 
+        public const string BeginningMessage = "Get new ID card and scan QR Code. Make sure reader has no card.\n" +
+                                                "1. Input New ID\n" +
+                                                "2. Select Company\n" +
+                                                "3. Press Save\n" +
+                                                "4. Place Card on Reader\n" +
+                                                "5. Wait for Beep and Take Off Card from Reader";
+
         private WinSCard scard = new WinSCard();
 
         private Dictionary<string, CompanyInfo> companyData = new Dictionary<string, CompanyInfo>
@@ -45,12 +52,7 @@ namespace RFIDReaderApp
         {
             InitializeComponent();
             PopulateComboBox();
-            txtPrompt.Text = "Get new ID card and scan QR Code. Make sure reader has no card.\n" +
-                             "1. Input New ID\n" +
-                             "2. Select Company\n" +
-                             "3. Press Save\n" +
-                             "4. Place Card on Reader\n" +
-                             "5. Wait for Beep and Take Off Card from Reader";
+            txtPrompt.Text = BeginningMessage;
             txtQR.Focus();
         }
 
@@ -329,15 +331,26 @@ namespace RFIDReaderApp
             }
         }
 
-
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
             SaveID();
         }
 
-        private void BtnClose_Click(object sender, RoutedEventArgs e)
+        private void BtnClear_Click(object sender, RoutedEventArgs e)
         {
-            this.Close(); // Closes the main window
+            // Clear the ID TextBox
+            txtQR.Text = string.Empty;
+
+            // Reset the ComboBox selection to no selected item
+            cmbCompany.SelectedIndex = -1;
+
+            // Reset the prompt message to the original message
+            txtPrompt.Text = BeginningMessage;
+            // Reset the company description label
+            lblCompanyDescription.Content = string.Empty;
+
+            // Set focus back to the txtQR TextBox for easy input
+            txtQR.Focus();
         }
     }
 }
