@@ -20,6 +20,12 @@ namespace RFIDReaderApp
             public string Suffix { get; set; }
         }
 
+        public class IDCheckResult
+        {
+            public bool Exists { get; set; }
+            public string CompanyID { get; set; }
+        }
+
         private WinSCard scard = new WinSCard();
 
         private Dictionary<string, CompanyInfo> companyData = new Dictionary<string, CompanyInfo>
@@ -39,9 +45,15 @@ namespace RFIDReaderApp
         {
             InitializeComponent();
             PopulateComboBox();
-            txtPrompt.Text = "Get new ID card and scan QR Code. Make sure reader has no card.";
+            txtPrompt.Text = "Get new ID card and scan QR Code. Make sure reader has no card.\n" +
+                             "1. Input New ID\n" +
+                             "2. Select Company\n" +
+                             "3. Press Save\n" +
+                             "4. Place Card on Reader\n" +
+                             "5. Wait for Beep and Take Off Card from Reader";
             txtQR.Focus();
         }
+
 
         private void PopulateComboBox()
         {
@@ -73,16 +85,9 @@ namespace RFIDReaderApp
             string promptMessage = "";
 
             // Check if a company is selected
-            if (cmbCompany.SelectedItem == null && string.IsNullOrEmpty(qrText))
+            if (cmbCompany.SelectedItem == null)
             {
-                txtPrompt.Text = "No changes made.";
-                return;
-            }
-
-            // Check if a company is selected but no ID is provided
-            if (cmbCompany.SelectedItem != null && string.IsNullOrEmpty(qrText))
-            {
-                txtPrompt.Text = "Please enter ID number.";
+                txtPrompt.Text = "Please select a company.";
                 return;
             }
 
@@ -100,13 +105,6 @@ namespace RFIDReaderApp
                 return;
             }
 
-            // Ensure a company is selected
-            if (cmbCompany.SelectedItem == null)
-            {
-                txtPrompt.Text = "Please select a company.";
-                return;
-            }
-
             var selectedCompanyCode = (string)cmbCompany.SelectedItem;
             var companyInfo = companyData[selectedCompanyCode];
             var suffix = companyInfo.Suffix;
@@ -115,7 +113,9 @@ namespace RFIDReaderApp
             string fullID = qrText + suffix;
 
             // Check if the original user input exists in the database
-            bool idExists = CheckIfIDExistsInDatabase(qrText);
+            var idExistResult = CheckIfIDExistsInDatabase(qrText);
+            bool idExists = idExistResult.Exists;
+            bool companyMatches = idExistResult.CompanyID == suffix;
 
             // Proceed with card writing logic if a reader is connected
             try
@@ -135,7 +135,7 @@ namespace RFIDReaderApp
                 return;
             }
 
-            txtPrompt.Text = "Put the card.";
+            txtPrompt.Text = "Put the card on the reader and wait for the beep.";
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background); // Ensure UI update
 
             try
@@ -146,7 +146,7 @@ namespace RFIDReaderApp
                 while (!scard.GetCardPresentState(readerName))
                 {
                     await Task.Delay(100); // Add a short delay to prevent tight loop
-                    txtPrompt.Text = "Put the card.";
+                    txtPrompt.Text = "Put the card on the reader and wait for the beep.";
                 }
 
                 // Card detected, proceed with connection
@@ -184,17 +184,26 @@ namespace RFIDReaderApp
                 string resp = BitConverter.ToString(respApdu.Take(respLength).ToArray()).Replace("-", "");
                 Console.WriteLine($"APDU Response: {resp}");
 
+                txtPrompt.Text = "Success. Please remove card.";
+
                 if (resp.StartsWith("90"))
                 {
-                    // Display success message for card writing
+                    // Card Messages
                     promptMessage += "Card ID updated successfully." + Environment.NewLine;
 
-                    // Check if the database update is needed
+                    // Proceed with database update only if the ID exists and the selected company matches
                     if (idExists)
                     {
-                        // Update the database with the new ID
-                        UpdateIDInDatabase(qrText, fullID); // id_data will be set to fullID
-                        promptMessage += "Database updated successfully.";
+                        if (companyMatches)
+                        {
+                            // Update the database with the new ID (update id_data only)
+                            string dbMessage = UpdateIDInDatabase(qrText, fullID); // Use fullID for the new ID
+                            promptMessage += dbMessage;
+                        }
+                        else
+                        {
+                            promptMessage += "ID Number found but does not match the selected company. Card updated without database modification.";
+                        }
                     }
                     else
                     {
@@ -219,7 +228,7 @@ namespace RFIDReaderApp
                 }
                 else
                 {
-                    txtPrompt.Text = $"Failed. Response Code: {resp}";
+                    txtPrompt.Text = $"Card Messages: Failed. Response Code: {resp}";
                 }
             }
             catch (Exception ex)
@@ -234,7 +243,7 @@ namespace RFIDReaderApp
         }
 
 
-        private bool CheckIfIDExistsInDatabase(string originalID)
+        public IDCheckResult CheckIfIDExistsInDatabase(string originalID)
         {
             using (MySqlConnection conn = new MySqlConnection(connectionString))
             {
@@ -242,60 +251,83 @@ namespace RFIDReaderApp
                 {
                     conn.Open();
 
-                    string query = "SELECT COUNT(*) FROM tk_data WHERE id_number = @OriginalID";
+                    string query = "SELECT company_id FROM tk_data WHERE id_number = @OriginalID";
                     using (MySqlCommand cmd = new MySqlCommand(query, conn))
                     {
                         cmd.Parameters.AddWithValue("@OriginalID", originalID);
 
-                        int count = Convert.ToInt32(cmd.ExecuteScalar());
-                        return count > 0;
+                        using (MySqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                string companyID = reader.GetString(0);
+                                return new IDCheckResult { Exists = true, CompanyID = companyID };
+                            }
+                            else
+                            {
+                                return new IDCheckResult { Exists = false };
+                            }
+                        }
                     }
                 }
-                catch (MySqlException ex)
+                catch (Exception ex)
                 {
-                    MessageBox.Show($"Database error: {ex.Message}");
-                    return false;
+                    MessageBox.Show($"Error: {ex.Message}");
+                    return new IDCheckResult { Exists = false };
                 }
             }
         }
 
-        private void UpdateIDInDatabase(string originalID, string newFullID)
+        public string UpdateIDInDatabase(string originalID, string newID)
         {
-            var selectedCompanyCode = (string)cmbCompany.SelectedItem;
-            if (!companyData.TryGetValue(selectedCompanyCode, out var companyInfo))
-            {
-                MessageBox.Show("Company information not found.");
-                return;
-            }
-
-            string companyId = companyInfo.Suffix; // Assuming companyInfo.Suffix contains company_id
-
             using (MySqlConnection conn = new MySqlConnection(connectionString))
             {
                 try
                 {
                     conn.Open();
 
-                    // Update id_data to be the same as id_number, but only for the matching company_id
-                    string query = "UPDATE tk_data SET id_data = id_number WHERE id_number = @OriginalID AND company_id = @CompanyID";
-                    using (MySqlCommand cmd = new MySqlCommand(query, conn))
+                    // Get company ID from selected company code
+                    var selectedCompanyCode = (string)cmbCompany.SelectedItem;
+                    if (companyData.TryGetValue(selectedCompanyCode, out var companyInfo))
                     {
-                        cmd.Parameters.AddWithValue("@OriginalID", originalID); // id_number to find the correct record
-                        cmd.Parameters.AddWithValue("@CompanyID", companyId); // company_id to specify the correct company
+                        var companyID = companyInfo.Suffix; // Get the company ID from suffix
 
-                        int rowsAffected = cmd.ExecuteNonQuery();
-                        if (rowsAffected == 0)
+                        // Ensure the correct value is used
+                        Console.WriteLine($"Updating database: OriginalID={originalID}, NewID={newID}, CompanyID={companyID}");
+
+                        // Update id_data to the new ID and ensure it's only updating for the correct company
+                        string query = "UPDATE tk_data SET id_data = @NewID WHERE id_number = @OriginalID AND company_id = @CompanyID";
+                        using (MySqlCommand cmd = new MySqlCommand(query, conn))
                         {
-                            MessageBox.Show("No matching records found for the specified company.");
+                            cmd.Parameters.AddWithValue("@OriginalID", originalID);
+                            cmd.Parameters.AddWithValue("@NewID", newID); // Set id_data to the new ID
+                            cmd.Parameters.AddWithValue("@CompanyID", companyID); // Ensure you are only updating for the correct company
+
+                            int rowsAffected = cmd.ExecuteNonQuery();
+
+                            if (rowsAffected > 0)
+                            {
+                                return "ID data updated successfully.";
+                            }
+                            else
+                            {
+                                return "No matching record found to update.";
+                            }
                         }
                     }
+                    else
+                    {
+                        return "Selected company code is invalid.";
+                    }
                 }
-                catch (MySqlException ex)
+                catch (Exception ex)
                 {
-                    MessageBox.Show($"Database error: {ex.Message}");
+                    MessageBox.Show($"Error: {ex.Message}");
+                    return "Error updating database.";
                 }
             }
         }
+
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
