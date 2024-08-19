@@ -113,32 +113,34 @@ namespace RFIDReaderApp
             {
                 scard.EstablishContext();
                 scard.ListReaders();
+                if (scard.ReaderNames.Length == 0)
+                {
+                    txtPrompt.Text = "No card reader found.";
+                    return;
+                }
+
                 string readerName = scard.ReaderNames[0];
 
-                // Wait for card presence
+                // Wait for card presence with a delay to prevent a tight loop
                 while (!scard.GetCardPresentState(readerName))
                 {
-                    await Task.Delay(100); // Add a short delay to prevent tight loop
+                    await Task.Delay(200); // Add a short delay
                     txtPrompt.Text = "Put the card.";
                 }
 
                 // Card detected, proceed with connection
                 scard.Connect(readerName);
 
+                // Proceed with authentication and writing logic
+                byte[] cmdApduAuth = { 0xFF, 0x86, 0x00, 0x00, 0x05, 0x01, 0x00, 0x01, 0x60, 0x00 }; // authenticate
+                byte[] respApduAuth = new byte[256];
+                int respLengthAuth = respApduAuth.Length;
+                scard.Transmit(cmdApduAuth, cmdApduAuth.Length, respApduAuth, ref respLengthAuth);
+
                 string hex0 = "0" + qrText.Substring(0, 1);
                 string hex1 = qrText.Substring(1, 2);
                 string hex2 = qrText.Substring(3, 2);
                 string hex3 = qrText.Substring(5, 2);
-
-                byte[] cmdApduAuth =
-                {
-            0xFF, 0x86, 0x00, 0x00, 0x05,
-            0x01, 0x00, 0x01, 0x60, 0x00
-        }; // authenticate
-
-                byte[] respApduAuth = new byte[256];
-                int respLengthAuth = respApduAuth.Length;
-                scard.Transmit(cmdApduAuth, cmdApduAuth.Length, respApduAuth, ref respLengthAuth);
 
                 byte[] cmdApdu =
                 {
@@ -147,7 +149,7 @@ namespace RFIDReaderApp
             Byte.Parse(hex1, NumberStyles.HexNumber),
             Byte.Parse(hex2, NumberStyles.HexNumber),
             Byte.Parse(hex3, NumberStyles.HexNumber),
-            Byte.Parse(suffix, NumberStyles.HexNumber) // Use suffix from ComboBox
+            Byte.Parse(suffix, NumberStyles.HexNumber)
         };
 
                 byte[] respApdu = new byte[256];
@@ -172,7 +174,7 @@ namespace RFIDReaderApp
                     // Wait for card removal
                     while (scard.GetCardPresentState(readerName))
                     {
-                        await Task.Delay(100); // Add a short delay to prevent tight loop
+                        await Task.Delay(200); // Add a short delay to prevent tight loop
                     }
 
                     // Refresh the message after the card is removed
@@ -190,10 +192,11 @@ namespace RFIDReaderApp
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error: {ex.Message}\n{ex.StackTrace}");
+                txtPrompt.Text = $"Error: {ex.Message}";
             }
             finally
             {
+                // Ensure proper disconnection and context release
                 scard.Disconnect();
                 scard.ReleaseContext();
             }
@@ -201,11 +204,19 @@ namespace RFIDReaderApp
 
         private async Task<string> ReadCardIdAsync()
         {
+            await Task.Delay(100);
+
             string result = string.Empty;
             try
             {
                 scard.EstablishContext();
                 scard.ListReaders();
+
+                if (scard.ReaderNames.Length == 0)
+                {
+                    txtPrompt.Text = "No card reader found.";
+                    return result;
+                }
 
                 byte[] cmdApduAuth = { 0xFF, 0x86, 0x00, 0x00, 0x05, 0x01, 0x00, 0x01, 0x60, 0x00 }; // authenticate
                 byte[] respApduAuth = new byte[256];
@@ -226,12 +237,12 @@ namespace RFIDReaderApp
                 // Display result for debugging purposes
                 Console.WriteLine($"Read ID: {result}");
 
-                // You can use this result to update UI labels or log it
-                lblNewID.Content = result; // Update the label with the old ID
+                // Update UI with the read ID
+                lblNewID.Content = result;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error reading card ID: {ex.Message}");
+                txtPrompt.Text = $"Error reading card ID: {ex.Message}";
             }
             finally
             {
@@ -241,6 +252,7 @@ namespace RFIDReaderApp
 
             return result;
         }
+
         private void LogIDChange(string oldID, string newID, string suffix)
         {
             // Construct the log entry
