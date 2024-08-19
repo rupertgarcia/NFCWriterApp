@@ -1,14 +1,16 @@
-﻿using GS.SCard;
-using MySql.Data.MySqlClient;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Threading;
+using GS.SCard;
+using System.Globalization;
+using System.Linq;
 using System.Windows.Threading;
+using System.Threading.Tasks;
+using System.IO;
+using System.Diagnostics;
 
 namespace RFIDReaderApp
 {
@@ -20,20 +22,15 @@ namespace RFIDReaderApp
             public string Suffix { get; set; }
         }
 
-        public class IDCheckResult
-        {
-            public bool Exists { get; set; }
-            public string CompanyID { get; set; }
-        }
-
         public const string BeginningMessage = "Get new ID card and scan QR Code. Make sure reader has no card.\n" +
-                                                "1. Input New ID\n" +
-                                                "2. Select Company\n" +
-                                                "3. Press Save\n" +
-                                                "4. Place Card on Reader\n" +
-                                                "5. Wait for Beep and Take Off Card from Reader";
+                                        "1. Input New ID\n" +
+                                        "2. Select Company\n" +
+                                        "3. Place Card on Reader\n" +
+                                        "4. Press Save\n" +
+                                        "5. Wait for Beep and Take Off Card from Reader";
 
         private WinSCard scard = new WinSCard();
+        private string logFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "IDChangeLog.txt");
 
         private Dictionary<string, CompanyInfo> companyData = new Dictionary<string, CompanyInfo>
         {
@@ -46,8 +43,6 @@ namespace RFIDReaderApp
             { "GRUPPO", new CompanyInfo { Description = "GRUPPO EMS", Suffix = "20" } }
         };
 
-        private string connectionString = "server=localhost;port=3306;database=employee_db;user=root;password=";
-
         public MainWindow()
         {
             InitializeComponent();
@@ -55,7 +50,6 @@ namespace RFIDReaderApp
             txtPrompt.Text = BeginningMessage;
             txtQR.Focus();
         }
-
 
         private void PopulateComboBox()
         {
@@ -83,15 +77,8 @@ namespace RFIDReaderApp
 
         private async void SaveID()
         {
+            string oldId = await ReadCardIdAsync(); // Get the old ID
             string qrText = txtQR.Text;
-            string promptMessage = "";
-
-            // Check if a company is selected
-            if (cmbCompany.SelectedItem == null)
-            {
-                txtPrompt.Text = "Please select a company.";
-                return;
-            }
 
             // Check for empty input
             if (string.IsNullOrEmpty(qrText))
@@ -101,9 +88,16 @@ namespace RFIDReaderApp
             }
 
             // Check for insufficient characters
-            if (qrText.Length < 7)
+            if (qrText.Length < 7) // Adjust the length check based on your requirements
             {
                 txtPrompt.Text = "Insufficient characters on ID.";
+                return;
+            }
+
+            // Check if a company is selected
+            if (cmbCompany.SelectedItem == null)
+            {
+                txtPrompt.Text = "Please select a company.";
                 return;
             }
 
@@ -111,44 +105,20 @@ namespace RFIDReaderApp
             var companyInfo = companyData[selectedCompanyCode];
             var suffix = companyInfo.Suffix;
 
-            // Combine user input with suffix to create the new full ID
-            string fullID = qrText + suffix;
-
-            // Check if the original user input exists in the database
-            var idExistResult = CheckIfIDExistsInDatabase(qrText);
-            bool idExists = idExistResult.Exists;
-            bool companyMatches = idExistResult.CompanyID == suffix;
-
-            // Proceed with card writing logic if a reader is connected
-            try
-            {
-                scard.EstablishContext();
-                scard.ListReaders();
-
-                if (scard.ReaderNames.Length == 0)
-                {
-                    txtPrompt.Text = "No reader connected.";
-                    return;
-                }
-            }
-            catch (Exception)
-            {
-                txtPrompt.Text = "No reader connected.";
-                return;
-            }
-
-            txtPrompt.Text = "Put the card on the reader and wait for the beep.";
+            txtPrompt.Text = "Put the card.";
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background); // Ensure UI update
 
             try
             {
+                scard.EstablishContext();
+                scard.ListReaders();
                 string readerName = scard.ReaderNames[0];
 
                 // Wait for card presence
                 while (!scard.GetCardPresentState(readerName))
                 {
                     await Task.Delay(100); // Add a short delay to prevent tight loop
-                    txtPrompt.Text = "Put the card on the reader and wait for the beep.";
+                    txtPrompt.Text = "Put the card.";
                 }
 
                 // Card detected, proceed with connection
@@ -186,32 +156,17 @@ namespace RFIDReaderApp
                 string resp = BitConverter.ToString(respApdu.Take(respLength).ToArray()).Replace("-", "");
                 Console.WriteLine($"APDU Response: {resp}");
 
-                await Task.Delay(100);
-                txtPrompt.Text = "Success. Please remove card.";
-
                 if (resp.StartsWith("90"))
                 {
-                    // Card Messages
-                    promptMessage += "Card ID updated successfully." + Environment.NewLine;
+                    // Successfully written, now read the new ID to verify
+                    string newId = await ReadCardIdAsync();
 
-                    // Proceed with database update only if the ID exists and the selected company matches
-                    if (idExists)
-                    {
-                        if (companyMatches)
-                        {
-                            // Update the database with the new ID (update id_data only)
-                            string dbMessage = UpdateIDInDatabase(qrText, fullID); // Use fullID for the new ID
-                            promptMessage += dbMessage;
-                        }
-                        else
-                        {
-                            promptMessage += "ID Number found but does not match the selected company. Card updated without database modification.";
-                        }
-                    }
-                    else
-                    {
-                        promptMessage += "ID Number can't be found in the database.";
-                    }
+                    // Display success message
+                    txtPrompt.Text = "Success. Please remove the card.";
+                    lblNewID.Content = newId; // Update the label with the new ID
+
+                    // Log the changes including the old and new IDs
+                    LogIDChange(oldId, newId, suffix);
 
                     // Wait for card removal
                     while (scard.GetCardPresentState(readerName))
@@ -222,16 +177,14 @@ namespace RFIDReaderApp
                     // Refresh the message after the card is removed
                     Dispatcher.Invoke(() =>
                     {
-                        txtPrompt.Text = promptMessage;
-                        lblNewID.Content = qrText; // Display new ID without suffix
-
+                        txtPrompt.Text = "Please scan a new card.";
                         txtQR.Text = "";
                         txtQR.Focus();
                     }, DispatcherPriority.ContextIdle);
                 }
                 else
                 {
-                    txtPrompt.Text = $"Card Messages: Failed. Response Code: {resp}";
+                    txtPrompt.Text = $"Failed. Response Code: {resp}";
                 }
             }
             catch (Exception ex)
@@ -245,89 +198,59 @@ namespace RFIDReaderApp
             }
         }
 
-        public IDCheckResult CheckIfIDExistsInDatabase(string originalID)
+        private async Task<string> ReadCardIdAsync()
         {
-            using (MySqlConnection conn = new MySqlConnection(connectionString))
+            string result = string.Empty;
+            try
             {
-                try
-                {
-                    conn.Open();
+                scard.EstablishContext();
+                scard.ListReaders();
 
-                    string query = "SELECT company_id FROM tk_data WHERE id_number = @OriginalID";
-                    using (MySqlCommand cmd = new MySqlCommand(query, conn))
-                    {
-                        cmd.Parameters.AddWithValue("@OriginalID", originalID);
+                byte[] cmdApduAuth = { 0xFF, 0x86, 0x00, 0x00, 0x05, 0x01, 0x00, 0x01, 0x60, 0x00 }; // authenticate
+                byte[] respApduAuth = new byte[256];
+                int respLengthAuth = respApduAuth.Length;
 
-                        using (MySqlDataReader reader = cmd.ExecuteReader())
-                        {
-                            if (reader.Read())
-                            {
-                                string companyID = reader.GetString(0);
-                                return new IDCheckResult { Exists = true, CompanyID = companyID };
-                            }
-                            else
-                            {
-                                return new IDCheckResult { Exists = false };
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error: {ex.Message}");
-                    return new IDCheckResult { Exists = false };
-                }
+                byte[] cmdApdu = { 0xFF, 0xB0, 0x00, 0x01, 0x10 }; // read section 0 block 1
+                byte[] respApdu = new byte[256];
+                int respLength = respApdu.Length;
+
+                string readerName = scard.ReaderNames[0];
+
+                scard.Connect(readerName);
+                scard.Transmit(cmdApduAuth, cmdApduAuth.Length, respApduAuth, ref respLengthAuth);
+                scard.Transmit(cmdApdu, cmdApdu.Length, respApdu, ref respLength);
+
+                result = BitConverter.ToString(respApdu.Take(5).ToArray()).Replace("-", "");
+
+                // Display result for debugging purposes
+                Console.WriteLine($"Read ID: {result}");
+
+                // You can use this result to update UI labels or log it
+                lblNewID.Content = result; // Update the label with the old ID
             }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error reading card ID: {ex.Message}");
+            }
+            finally
+            {
+                scard.Disconnect();
+                scard.ReleaseContext();
+            }
+
+            return result;
         }
-
-        public string UpdateIDInDatabase(string originalID, string newID)
+        private void LogIDChange(string oldID, string newID, string suffix)
         {
-            using (MySqlConnection conn = new MySqlConnection(connectionString))
-            {
-                try
-                {
-                    conn.Open();
+            // Construct the log entry
+            string timestamp = DateTime.Now.ToString("MM/dd/yyyy : hh:mm tt", CultureInfo.InvariantCulture);
+            string newLog = $"Old ID: {oldID}\nNew ID: {newID}\nDate and Time: {timestamp}\n\n";
 
-                    // Get company ID from selected company code
-                    var selectedCompanyCode = (string)cmbCompany.SelectedItem;
-                    if (companyData.TryGetValue(selectedCompanyCode, out var companyInfo))
-                    {
-                        var companyID = companyInfo.Suffix; // Get the company ID from suffix
+            // Write to the log file
+            File.AppendAllText(logFilePath, newLog);
 
-                        // Ensure the correct value is used
-                        Console.WriteLine($"Updating database: OriginalID={originalID}, NewID={newID}, CompanyID={companyID}");
-
-                        // Update id_data to the new ID and ensure it's only updating for the correct company
-                        string query = "UPDATE tk_data SET id_data = @NewID WHERE id_number = @OriginalID AND company_id = @CompanyID";
-                        using (MySqlCommand cmd = new MySqlCommand(query, conn))
-                        {
-                            cmd.Parameters.AddWithValue("@OriginalID", originalID);
-                            cmd.Parameters.AddWithValue("@NewID", newID); // Set id_data to the new ID
-                            cmd.Parameters.AddWithValue("@CompanyID", companyID); // Ensure you are only updating for the correct company
-
-                            int rowsAffected = cmd.ExecuteNonQuery();
-
-                            if (rowsAffected > 0)
-                            {
-                                return "ID data updated successfully.";
-                            }
-                            else
-                            {
-                                return "No matching record found to update.";
-                            }
-                        }
-                    }
-                    else
-                    {
-                        return "Selected company code is invalid.";
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error: {ex.Message}");
-                    return "Error updating database.";
-                }
-            }
+            // Launch or update Notepad
+            Process.Start("notepad.exe", logFilePath);
         }
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
@@ -346,7 +269,9 @@ namespace RFIDReaderApp
             // Reset the prompt message to the original message
             txtPrompt.Text = BeginningMessage;
             // Reset the company description label
-            lblCompanyDescription.Content = string.Empty;
+            lblCompanyDescription.Content = "Company Description";
+
+            lblNewID.Content = String.Empty;
 
             // Set focus back to the txtQR TextBox for easy input
             txtQR.Focus();
