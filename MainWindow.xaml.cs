@@ -34,13 +34,14 @@ namespace RFIDReaderApp
 
         private Dictionary<string, CompanyInfo> companyData = new Dictionary<string, CompanyInfo>
         {
-            { "AMI", new CompanyInfo { Description = "Alliance Mansols Inc.", Suffix = "1" } },
-            { "EMSCAI", new CompanyInfo { Description = "EMS Components Assembly Inc.", Suffix = "3" } },
-            { "ERTI", new CompanyInfo { Description = "EMS Resources Technology Inc.", Suffix = "5" } },
+            { "AMI", new CompanyInfo { Description = "Alliance Mansols Inc.", Suffix = "01" } },
+            { "EMSCAI", new CompanyInfo { Description = "EMS Components Assembly Inc.", Suffix = "03" } },
+            { "ERTI", new CompanyInfo { Description = "EMS Resources Technology Inc.", Suffix = "05" } },
             { "CREO", new CompanyInfo { Description = "Creotec Philippines Inc.", Suffix = "17" } },
             { "ESPI", new CompanyInfo { Description = "EMS Services Philippines Inc.", Suffix = "18" } },
             { "ESII", new CompanyInfo { Description = "EMS Services International Inc.", Suffix = "19" } },
-            { "GRUPPO", new CompanyInfo { Description = "GRUPPO EMS", Suffix = "20" } }
+            { "GRUPPO", new CompanyInfo { Description = "GRUPPO EMS", Suffix = "20" } },
+            { "DUALTECH", new CompanyInfo { Description = "Dualtech Training Center", Suffix = "21" } },
         };
 
         public MainWindow()
