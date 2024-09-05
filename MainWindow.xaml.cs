@@ -17,6 +17,10 @@ namespace RFIDReaderApp
     public partial class MainWindow : Window
     {
         private string folderPath = Path.Combine("C:", "NFCWriter");
+        private WinSCard scard = new WinSCard();
+        private string currentCardId = string.Empty;
+        private Task monitoringTask;
+        private CancellationTokenSource cancellationTokenSource;
 
         public class CompanyInfo
         {
@@ -25,13 +29,12 @@ namespace RFIDReaderApp
         }
 
         public const string BeginningMessage = "Get new ID card and scan QR Code. Make sure reader has no card.\n" +
-                                        "1. Input New ID\n" +
-                                        "2. Select Company\n" +
-                                        "3. Place Card on Reader\n" +
-                                        "4. Press Save\n" +
-                                        "5. Wait for Beep and Take Off Card from Reader";
+                                        "1. Input New ID and Select Company\n" +
+                                        "2. Place Card on Reader\n" +
+                                        "3. Press Save\n" +
+                                        "4. Wait for Beep and Take Off Card from Reader\n" +
+                                        "5. Press Clear to Start Again";
 
-        private WinSCard scard = new WinSCard();
         private string logFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "IDChangeLog.txt");
 
         private Dictionary<string, CompanyInfo> companyData = new Dictionary<string, CompanyInfo>
@@ -58,6 +61,8 @@ namespace RFIDReaderApp
 
             // Ensure the directory exists when the application starts
             EnsureDirectoryExists();
+
+            StartMonitoringCard();
         }
 
         private void EnsureDirectoryExists()
@@ -91,6 +96,122 @@ namespace RFIDReaderApp
                 SaveID();
             }
         }
+
+        private void StartMonitoringCard()
+        {
+            cancellationTokenSource = new CancellationTokenSource();
+            monitoringTask = Task.Run(() => MonitorCard(cancellationTokenSource.Token), cancellationTokenSource.Token);
+        }
+
+        private async Task MonitorCard(CancellationToken token)
+        {
+            try
+            {
+                scard.EstablishContext();
+                scard.ListReaders();
+
+                if (scard.ReaderNames.Length == 0)
+                {
+                    Dispatcher.Invoke(() => lblCurrentID.Content = "No card reader found.");
+                    return;
+                }
+
+                string readerName = scard.ReaderNames[0];
+
+                while (!token.IsCancellationRequested)
+                {
+                    bool cardPresent = scard.GetCardPresentState(readerName);
+
+                    if (cardPresent)
+                    {
+                        string id = await ReadCardIdAsync();
+                        if (id != currentCardId)
+                        {
+                            currentCardId = id;
+                            Dispatcher.Invoke(() =>
+                            {
+                                lblCurrentID.Content = string.IsNullOrEmpty(currentCardId) ? "0000000" : currentCardId;
+                            });
+                        }
+                    }
+                    else
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            lblCurrentID.Content = string.Empty; // Clear the label when no card is detected
+                        });
+                        currentCardId = string.Empty;
+                    }
+
+                    await Task.Delay(500); // Delay to prevent tight loop
+                }
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => txtPrompt.Text = $"Error monitoring card: {ex.Message}");
+            }
+            finally
+            {
+                scard.Disconnect();
+                scard.ReleaseContext();
+            }
+        }
+
+
+        private async Task<string> ReadCardIdAsync()
+        {
+            await Task.Delay(100);
+
+            string result = string.Empty;
+            try
+            {
+                scard.EstablishContext();
+                scard.ListReaders();
+
+                if (scard.ReaderNames.Length == 0)
+                {
+                    Dispatcher.Invoke(() => txtPrompt.Text = "No card reader found.");
+                    return result;
+                }
+
+                byte[] cmdApduAuth = { 0xFF, 0x86, 0x00, 0x00, 0x05, 0x01, 0x00, 0x01, 0x60, 0x00 }; // authenticate
+                byte[] respApduAuth = new byte[256];
+                int respLengthAuth = respApduAuth.Length;
+
+                byte[] cmdApdu = { 0xFF, 0xB0, 0x00, 0x01, 0x10 }; // read section 0 block 1
+                byte[] respApdu = new byte[256];
+                int respLength = respApdu.Length;
+
+                string readerName = scard.ReaderNames[0];
+
+                scard.Connect(readerName);
+                scard.Transmit(cmdApduAuth, cmdApduAuth.Length, respApduAuth, ref respLengthAuth);
+                scard.Transmit(cmdApdu, cmdApdu.Length, respApdu, ref respLength);
+
+                result = BitConverter.ToString(respApdu.Take(5).ToArray()).Replace("-", "");
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => txtPrompt.Text = $"Error reading card ID: {ex.Message}");
+            }
+            finally
+            {
+                scard.Disconnect();
+                scard.ReleaseContext();
+            }
+
+            return result;
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+            cancellationTokenSource?.Cancel();
+            monitoringTask?.Wait();
+        }
+
+
+
 
         private async void SaveID()
         {
@@ -218,56 +339,7 @@ namespace RFIDReaderApp
             }
         }
 
-        private async Task<string> ReadCardIdAsync()
-        {
-            await Task.Delay(100);
 
-            string result = string.Empty;
-            try
-            {
-                scard.EstablishContext();
-                scard.ListReaders();
-
-                if (scard.ReaderNames.Length == 0)
-                {
-                    txtPrompt.Text = "No card reader found.";
-                    return result;
-                }
-
-                byte[] cmdApduAuth = { 0xFF, 0x86, 0x00, 0x00, 0x05, 0x01, 0x00, 0x01, 0x60, 0x00 }; // authenticate
-                byte[] respApduAuth = new byte[256];
-                int respLengthAuth = respApduAuth.Length;
-
-                byte[] cmdApdu = { 0xFF, 0xB0, 0x00, 0x01, 0x10 }; // read section 0 block 1
-                byte[] respApdu = new byte[256];
-                int respLength = respApdu.Length;
-
-                string readerName = scard.ReaderNames[0];
-
-                scard.Connect(readerName);
-                scard.Transmit(cmdApduAuth, cmdApduAuth.Length, respApduAuth, ref respLengthAuth);
-                scard.Transmit(cmdApdu, cmdApdu.Length, respApdu, ref respLength);
-
-                result = BitConverter.ToString(respApdu.Take(5).ToArray()).Replace("-", "");
-
-                // Display result for debugging purposes
-                Console.WriteLine($"Read ID: {result}");
-
-                // Update UI with the read ID
-                lblNewID.Content = result;
-            }
-            catch (Exception ex)
-            {
-                txtPrompt.Text = $"Error reading card ID: {ex.Message}";
-            }
-            finally
-            {
-                scard.Disconnect();
-                scard.ReleaseContext();
-            }
-
-            return result;
-        }
 
         private void LogIDChange(string oldID, string newID, string companyName)
         {
@@ -304,14 +376,35 @@ namespace RFIDReaderApp
 
             // Reset the prompt message to the original message
             txtPrompt.Text = BeginningMessage;
+
             // Reset the company description label
             lblCompanyDescription.Content = "Company Description";
 
+            // Clear the labels for new and current IDs
             lblNewID.Content = String.Empty;
+            lblCurrentID.Content = String.Empty;
 
             // Set focus back to the txtQR TextBox for easy input
             txtQR.Focus();
+
+            // Restart the card monitoring process
+            RestartMonitoring();
         }
+
+        private void RestartMonitoring()
+        {
+            // Cancel the existing monitoring task if it exists
+            cancellationTokenSource?.Cancel();
+            monitoringTask?.Wait();
+
+            // Ensure that the monitoring task is properly disposed
+            cancellationTokenSource?.Dispose();
+
+            // Start a new monitoring task
+            cancellationTokenSource = new CancellationTokenSource();
+            monitoringTask = Task.Run(() => MonitorCard(cancellationTokenSource.Token), cancellationTokenSource.Token);
+        }
+
 
         private void ViewLogs_Click(object sender, RoutedEventArgs e)
         {
