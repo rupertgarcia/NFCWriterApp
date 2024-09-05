@@ -158,6 +158,7 @@ namespace RFIDReaderApp
         }
 
 
+
         private async Task<string> ReadCardIdAsync()
         {
             await Task.Delay(100);
@@ -404,6 +405,7 @@ namespace RFIDReaderApp
             cancellationTokenSource = new CancellationTokenSource();
             monitoringTask = Task.Run(() => MonitorCard(cancellationTokenSource.Token), cancellationTokenSource.Token);
         }
+
 
 
         private void ViewLogs_Click(object sender, RoutedEventArgs e)
