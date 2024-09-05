@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.11.35208.52
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RFIDReaderApp", "RFIDReaderApp.csproj", "{6F8D8D44-FA1C-403C-B10E-5504F9AE8644}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NFCScanAndWrite", "NFCScanAndWrite.csproj", "{6F8D8D44-FA1C-403C-B10E-5504F9AE8644}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
