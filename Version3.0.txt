@@ -1,5 +1,3 @@
-﻿//Code by OJT 1 BSCPE 3-1 Rups and Logo by JB
-
 using System;
 using System.Collections.Generic;
 using System.Windows;
@@ -151,6 +149,7 @@ namespace RFIDReaderApp
             catch (Exception ex)
             {
                 LogError("MonitorCard", ex);
+                Dispatcher.Invoke(() => txtPrompt.Text = $"Error monitoring card: {ex.Message}");
             }
             finally
             {
@@ -195,6 +194,7 @@ namespace RFIDReaderApp
             }
             catch (Exception ex)
             {
+                Dispatcher.Invoke(() => txtPrompt.Text = $"Error reading card ID: {ex.Message}");
                 Debug.WriteLine($"Exception in ReadCardIdAsync: {ex.Message}");
             }
             finally
@@ -305,7 +305,7 @@ namespace RFIDReaderApp
                     string newId = await ReadCardIdAsync();
 
                     // Display success message
-                    txtPrompt.Text = "Success. Please remove the card and press Clear.";
+                    txtPrompt.Text = "Success. Please remove the card.";
                     lblNewID.Content = newId; // Update the label with the new ID
 
                     // Log the changes including the old and new IDs
@@ -327,14 +327,13 @@ namespace RFIDReaderApp
                 }
                 else
                 {
-                    txtPrompt.Text = $"Check View Logs to confirm save and press Clear.";
+                    txtPrompt.Text = $"Failed. Response Code: {resp}";
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Display a generic error message without specifics
-                txtPrompt.Text = "Check View Logs to confirm save and press Clear.";
-                LogError("SaveID", new Exception("An error occurred during the card writing process."));
+                LogError("SaveID", ex);
+                txtPrompt.Text = $"Error: {ex.Message}";
             }
             finally
             {

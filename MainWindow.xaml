@@ -6,7 +6,7 @@
     mc:Ignorable="av"
     x:Class="RFIDReaderApp.MainWindow"
     Title="RFID Reader"
-    WindowState="Maximized" Height="670">
+    WindowState="Maximized" Height="670" Icon="/nfcwriter_logo.png">
 
     <Grid Background="White" Margin="0,24,0,24">
         <!-- Define grid structure -->
