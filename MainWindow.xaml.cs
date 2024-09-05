@@ -16,6 +16,8 @@ namespace RFIDReaderApp
 {
     public partial class MainWindow : Window
     {
+        private string folderPath = Path.Combine("C:", "NFCWriter");
+
         public class CompanyInfo
         {
             public string Description { get; set; }
@@ -50,7 +52,21 @@ namespace RFIDReaderApp
             PopulateComboBox();
             txtPrompt.Text = BeginningMessage;
             txtQR.Focus();
+
+            // Add event handler for View Logs button
+            View_Logs.Click += ViewLogs_Click;
+
+            // Ensure the directory exists when the application starts
+            EnsureDirectoryExists();
         }
+
+        private void EnsureDirectoryExists()
+        {
+            if (!Directory.Exists(folderPath))
+            {
+                Directory.CreateDirectory(folderPath);
+            }
+        }            // Ensure the directory exists when the application starts
 
         private void PopulateComboBox()
         {
@@ -169,7 +185,7 @@ namespace RFIDReaderApp
                     lblNewID.Content = newId; // Update the label with the new ID
 
                     // Log the changes including the old and new IDs
-                    LogIDChange(oldId, newId, suffix);
+                    LogIDChange(oldId, newId, companyInfo.Description);
 
                     // Wait for card removal
                     while (scard.GetCardPresentState(readerName))
@@ -253,17 +269,24 @@ namespace RFIDReaderApp
             return result;
         }
 
-        private void LogIDChange(string oldID, string newID, string suffix)
+        private void LogIDChange(string oldID, string newID, string companyName)
         {
+            // Define the directory and file path
+            string folderPath = @"C:\NFCWriter";
+            string logFilePath = Path.Combine(folderPath, "OldNewIDLogs.txt");
+
+            // Check if the directory exists, if not, create it
+            if (!Directory.Exists(folderPath))
+            {
+                Directory.CreateDirectory(folderPath);
+            }
+
             // Construct the log entry
             string timestamp = DateTime.Now.ToString("MM/dd/yyyy : hh:mm tt", CultureInfo.InvariantCulture);
-            string newLog = $"Old ID: {oldID}\nNew ID: {newID}\nDate and Time: {timestamp}\n\n";
+            string newLog = $"Old ID: {oldID}\nNew ID: {newID}\nCompany: {companyName}\nDate and Time: {timestamp}\n\n";
 
             // Write to the log file
             File.AppendAllText(logFilePath, newLog);
-
-            // Launch or update Notepad
-            Process.Start("notepad.exe", logFilePath);
         }
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
@@ -288,6 +311,21 @@ namespace RFIDReaderApp
 
             // Set focus back to the txtQR TextBox for easy input
             txtQR.Focus();
+        }
+
+        private void ViewLogs_Click(object sender, RoutedEventArgs e)
+        {
+            string logFilePath = @"C:\NFCWriter\OldNewIDLogs.txt";
+
+            // Check if the log file exists, and if it does, open it in Notepad
+            if (File.Exists(logFilePath))
+            {
+                Process.Start("notepad.exe", logFilePath);
+            }
+            else
+            {
+                txtPrompt.Text = "Log file not found.";
+            }
         }
     }
 }
